@@ -68,9 +68,18 @@ $ErrorActionPreference = 'SilentlyContinue'
 
 # Scan for JAR files
 try {
+    Show-Status "Searching for JAR files..."
     $jarFiles = Get-ChildItem -Path $scanPath -Filter "*.jar" -File -Recurse -ErrorAction SilentlyContinue
     
+    $totalFiles = $jarFiles.Count
+    Write-Progress -Activity "Searching for files" -Status "Found $totalFiles files to scan" -PercentComplete 0
+    
+    $counter = 0
     foreach ($jarFile in $jarFiles) { 
+        $counter++
+        $progress = [math]::Round(($counter / $totalFiles) * 100)
+        Write-Progress -Activity "Searching for files" -Status "Scanning $($jarFile.Name)" -PercentComplete $progress
+        
         try {
             $tempZip = [System.IO.Path]::ChangeExtension([System.IO.Path]::GetTempFileName(), ".zip")
             Copy-Item $jarFile.FullName $tempZip
@@ -97,6 +106,7 @@ try {
             continue
         }
     }
+    Write-Progress -Activity "Searching for files" -Completed
 }
 catch {
     # Silent error handling
@@ -104,13 +114,22 @@ catch {
 
 # Scan for suspicious directories
 try {
+    Show-Status "Searching for suspicious directories..."
     $cheatDirs = Get-ChildItem -Path $scanPath -Directory -Recurse -ErrorAction SilentlyContinue | 
                  Where-Object { 
                      $dir = $_
                      ($dir.Name -like "*cheat*" -or $dir.Name -like "*hack*" -or $dir.Name -like "*inject*")
                  }
     
+    $totalDirs = $cheatDirs.Count
+    Write-Progress -Activity "Searching for files" -Status "Found $totalDirs directories to scan" -PercentComplete 0
+    
+    $counter = 0
     foreach ($cheatDir in $cheatDirs) {
+        $counter++
+        $progress = [math]::Round(($counter / $totalDirs) * 100)
+        Write-Progress -Activity "Searching for files" -Status "Scanning directory $($cheatDir.Name)" -PercentComplete $progress
+        
         foreach ($indicator in $indicators) {
             $indicatorPath = Join-Path $cheatDir.FullName $indicator
             if (Test-Path $indicatorPath) {
@@ -123,6 +142,7 @@ try {
             }
         }
     }
+    Write-Progress -Activity "Searching for files" -Completed
 }
 catch {
     # Silent error handling
