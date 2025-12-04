@@ -150,14 +150,30 @@ catch {
 
 $ErrorActionPreference = 'Continue'
 
-# Export results
+# Display results
 if ($results.Count -gt 0) {
-    $results | Export-Csv -Path "FullScan.csv" -NoTypeInformation
+    Write-Host ""
+    Write-Host "==================================" -ForegroundColor Cyan
+    Write-Host "        DETECTION RESULTS         " -ForegroundColor Cyan
+    Write-Host "==================================" -ForegroundColor Cyan
+    Write-Host ""
+    
+    $results | Format-Table -AutoSize
+    
+    Write-Host ""
+    Write-Host "Total threats detected: $($results.Count)" -ForegroundColor Yellow
+    Write-Host ""
+} else {
+    Write-Host ""
+    Write-Host "==================================" -ForegroundColor Green
+    Write-Host "           NO THREATS FOUND       " -ForegroundColor Green
+    Write-Host "==================================" -ForegroundColor Green
+    Write-Host ""
 }
 
 # Final report
 Show-Status "Generating threat report..."
 Start-Sleep -Milliseconds 500
 
-Show-Success "Results saved to FullScan.csv"
+Show-Success "Results displayed in console"
 Show-Success "Scan completed!"
