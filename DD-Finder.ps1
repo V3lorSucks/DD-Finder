@@ -630,62 +630,7 @@ function Display-ProfessionalResults {
     Write-Host "Enterprise Threat Detection Framework v2.0" -ForegroundColor DarkGray
 }
 
-# Entry Point
-if ($MyInvocation.InvocationName -ne '.') {
-    # Run main scan
-    $mainReport = Start-ProfessionalScan @args
-    
-    # Run prefetch analysis from 2nd.ps1 embedded functionality
-    Write-Host ""
-    Write-Host "========================================" -ForegroundColor Cyan
-    Write-Host "RUNNING PREFETCH ANALYSIS " -ForegroundColor Cyan
-    Write-Host "========================================" -ForegroundColor Cyan
-    
-    # Embedded 2nd.ps1 functionality
-    $prefetchResults = Start-DoomsdayScan -Quiet
-    
-    # Display results from both scans
-    Write-Host ""
-    Write-Host "========================================" -ForegroundColor Green
-    Write-Host "CONSOLIDATED SCAN RESULTS" -ForegroundColor Green
-    Write-Host "========================================" -ForegroundColor Green
-    
-    Write-Host "MAIN ADVANCED ANALYSIS RESULTS:" -ForegroundColor White
-    if ($mainReport.DetailedDetections.Count -gt 0) {
-        Write-Host "Detections found: $($mainReport.DetailedDetections.Count)" -ForegroundColor Red
-        $detectionNum = 1
-        foreach ($detection in $mainReport.DetailedDetections) {
-            Write-Host "  [$detectionNum] Path: $($detection.FilePath)" -ForegroundColor Yellow
-            Write-Host "      Confidence: $($detection.Confidence)" -ForegroundColor White
-            Write-Host "      Threat Score: $($detection.ThreatScore)" -ForegroundColor White
-            $detectionNum++
-        }
-    } else {
-        Write-Host "No threats detected by main analysis" -ForegroundColor Green
-    }
-    
-    Write-Host ""
-    Write-Host "PREFETCH ANALYSIS RESULTS (2nd.ps1):" -ForegroundColor White
-    if ($prefetchResults -and $prefetchResults.Detections.Count -gt 0) {
-        Write-Host "Detections found: $($prefetchResults.Detections.Count)" -ForegroundColor Red
-        $detectionNum = 1
-        foreach ($detection in $prefetchResults.Detections) {
-            Write-Host "  [$detectionNum] Path: $($detection.Path)" -ForegroundColor Yellow
-            Write-Host "      Confidence: $($detection.Confidence)" -ForegroundColor White
-            Write-Host "      Source File: $($detection.SourceFile)" -ForegroundColor White
-            $detectionNum++
-        }
-    } else {
-        Write-Host "No threats detected by prefetch analysis" -ForegroundColor Green
-    }
-    
-    Write-Host ""
-    Write-Host "========================================" -ForegroundColor Green
-    Write-Host "SCANNING COMPLETE" -ForegroundColor Green
-    Write-Host "========================================" -ForegroundColor Green
-}
-
-# 2ND.PS1 FUNCTIONALITY EMBEDDED BELOW
+# 2ND.PS1 FUNCTIONALITY MOVED TO TOP
 
 function Show-Banner {
     # Quiet mode - skip banner display
@@ -1814,4 +1759,59 @@ function Start-DoomsdayScan {
         FilesScanned = $scanned
         FilesSkipped = $skipped
     }
+}
+
+# Main execution entry point
+if ($MyInvocation.InvocationName -ne '.') {
+    # Run main scan
+    $mainReport = Start-ProfessionalScan @args
+    
+    # Run prefetch analysis from 2nd.ps1 embedded functionality
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host "RUNNING PREFETCH ANALYSIS " -ForegroundColor Cyan
+    Write-Host "========================================" -ForegroundColor Cyan
+    
+    # Execute prefetch analysis using the embedded 2nd.ps1 functionality
+    $prefetchResults = Start-DoomsdayScan -Quiet:$true
+    
+    # Display results from both scans
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Green
+    Write-Host "CONSOLIDATED SCAN RESULTS" -ForegroundColor Green
+    Write-Host "========================================" -ForegroundColor Green
+    
+    Write-Host "MAIN ADVANCED ANALYSIS RESULTS:" -ForegroundColor White
+    if ($mainReport.DetailedDetections.Count -gt 0) {
+        Write-Host "Detections found: $($mainReport.DetailedDetections.Count)" -ForegroundColor Red
+        $detectionNum = 1
+        foreach ($detection in $mainReport.DetailedDetections) {
+            Write-Host "  [$detectionNum] Path: $($detection.FilePath)" -ForegroundColor Yellow
+            Write-Host "      Confidence: $($detection.Confidence)" -ForegroundColor White
+            Write-Host "      Threat Score: $($detection.ThreatScore)" -ForegroundColor White
+            $detectionNum++
+        }
+    } else {
+        Write-Host "No threats detected by main analysis" -ForegroundColor Green
+    }
+    
+    Write-Host ""
+    Write-Host "PREFETCH ANALYSIS RESULTS (2nd.ps1):" -ForegroundColor White
+    if ($prefetchResults -and $prefetchResults.Detections.Count -gt 0) {
+        Write-Host "Detections found: $($prefetchResults.Detections.Count)" -ForegroundColor Red
+        $detectionNum = 1
+        foreach ($detection in $prefetchResults.Detections) {
+            Write-Host "  [$detectionNum] Path: $($detection.Path)" -ForegroundColor Yellow
+            Write-Host "      Confidence: $($detection.Confidence)" -ForegroundColor White
+            Write-Host "      Source File: $($detection.SourceFile)" -ForegroundColor White
+            $detectionNum++
+        }
+    } else {
+        Write-Host "No threats detected by prefetch analysis" -ForegroundColor Green
+    }
+    
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Green
+    Write-Host "SCANNING COMPLETE" -ForegroundColor Green
+    Write-Host "========================================" -ForegroundColor Green
 }
