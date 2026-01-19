@@ -638,7 +638,7 @@ if ($MyInvocation.InvocationName -ne '.') {
     # Run prefetch analysis from 2nd.ps1 embedded functionality
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Cyan
-    Write-Host "RUNNING PREFETCH ANALYSIS (Integrated 2nd.ps1)" -ForegroundColor Cyan
+    Write-Host "RUNNING PREFETCH ANALYSIS " -ForegroundColor Cyan
     Write-Host "========================================" -ForegroundColor Cyan
     
     # Embedded 2nd.ps1 functionality
