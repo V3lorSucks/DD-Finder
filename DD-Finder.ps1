@@ -1,21 +1,5 @@
 #Requires -Version 5.1
 
-<#
-.SYNOPSIS
-    Advanced Malware Detection and Analysis Framework
-    Professional Threat Intelligence Platform
-
-.DESCRIPTION
-    Comprehensive security scanner that detects suspicious Java applications,
-    analyzes prefetch data, monitors file system activity, and identifies
-    potential malicious artifacts using multiple detection vectors.
-
-.AUTHOR
-    Security Research Team
-    Version: 2.0 Enterprise Edition
-#>
-
-# Core Configuration
 $Script:Config = @{
     MinFileSize = 200KB
     MaxFileSize = 15MB
@@ -57,13 +41,313 @@ $Script:ThreatSignatures = @{
     ExcludedPaths = @("\TEMP\", "\TMP\", "HSPERFDATA", ".tmp")
 }
 
-# Performance Monitoring
+# Performance Monitoring# Performance Monitoring
 $Script:PerformanceMetrics = @{
     StartTime = Get-Date
     FilesProcessed = 0
     DetectionsFound = 0
     ScanSpeed = 0
 }
+
+# --- Dynamic Terminal Width ---
+function Get-TerminalWidth {
+    try {
+        return $Host.UI.RawUI.WindowSize.Width
+    }
+    catch {
+        
+        return 80
+    }
+}
+
+
+
+
+
+
+function Write-TypingEffect {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$Text,
+        [int]$Delay = 2
+    )
+    $Text.ToCharArray() | ForEach-Object {
+        Write-Host -NoNewline $_
+        Start-Sleep -Milliseconds $Delay
+    }
+    Write-Host
+}
+
+function Write-Banner {
+    param (
+        [string]$Version = "v2.5",
+        [string]$Author = "DrValor (valor4.0)"
+    )
+
+    $asciiArt = @"
+ _                _ 
+   \ \              / / 
+    \ \            / / 
+     \ \          / / 
+      \ \        / / 
+       \ \______/ / 
+       /          \ 
+      /   _    _   \ 
+     |   (.)  (.)   | 
+     |      /\      | 
+      \    '--'    / 
+       '----------'
+"@
+    
+    $gradientColors = @("White", "Cyan", "DarkCyan", "Blue", "DarkBlue")
+
+    $width = Get-TerminalWidth
+    $borderChar = "="
+    $fullBorder = $borderChar * $width
+
+    
+    Write-Host $fullBorder -ForegroundColor DarkCyan
+    Write-Host
+
+    $lines = $asciiArt.Split([System.Environment]::NewLine)
+    foreach ($line in $lines) {
+        
+        $paddingLength = ($width - $line.Length) / 2
+        if ($paddingLength -lt 0) { $paddingLength = 0 }
+        $padding = " " * [int]$paddingLength
+        Write-Host -NoNewline $padding
+
+        # Render the line character by character with a gradient
+        if ($line.Trim().Length -gt 0) {
+            $colorStep = $line.Length / $gradientColors.Count
+            for ($i = 0; $i -lt $line.Length; $i++) {
+                $char = $line[$i]
+                $colorIndex = [math]::Min([math]::Floor($i / $colorStep), $gradientColors.Count - 1)
+                $charColor = $gradientColors[$colorIndex]
+                Write-Host -NoNewline $char -ForegroundColor $charColor
+            }
+        }
+        Write-Host 
+    }
+
+    Write-Host
+
+    $infoLine = "Version $Version by $Author"
+    $infoPaddingLength = ($width - $infoLine.Length) / 2
+    if ($infoPaddingLength -lt 0) { $infoPaddingLength = 0 }
+    $infoPadding = " " * [int]$infoPaddingLength
+    Write-Host -NoNewline $infoPadding
+    Write-Host $infoLine -ForegroundColor DarkGray
+    
+    Write-Host
+
+    Write-Host $fullBorder -ForegroundColor DarkCyan
+    Write-Host
+}
+
+
+
+function Write-Section {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$Title
+    )
+    $width = Get-TerminalWidth
+    $paddingLength = ($width - $Title.Length - 2) / 2
+    $padding = "-" * [int]$paddingLength
+    $formattedTitle = "$padding $($Title.ToUpper()) $padding"
+    if ($formattedTitle.Length -gt $width) {
+        $formattedTitle = "$($padding) $($Title.ToUpper()) $($padding)-"
+    }
+    Write-Host $formattedTitle -ForegroundColor White
+    Write-Host
+}
+
+function Write-Info {
+    param ([Parameter(Mandatory = $true, ValueFromPipeline = $true)] [string]$Message)
+    process { Write-Host "[*] $Message" -ForegroundColor Cyan }
+}
+
+function Write-Success {
+    param ([Parameter(Mandatory = $true, ValueFromPipeline = $true)] [string]$Message)
+    process { Write-Host "[+] $Message" -ForegroundColor Green }
+}
+
+function Write-Warning {
+    param ([Parameter(Mandatory = $true, ValueFromPipeline = $true)] [string]$Message)
+    process { Write-Host "[!] $Message" -ForegroundColor Yellow }
+}
+
+function Write-Error {
+    param ([Parameter(Mandatory = $true, ValueFromPipeline = $true)] [string]$Message)
+    process { Write-Host "[-] $Message" -ForegroundColor Red }
+}
+
+function Write-System {
+    param ([Parameter(Mandatory = $true, ValueFromPipeline = $true)] [string]$Message)
+    process { Write-Host "[SYSTEM] $Message" -ForegroundColor DarkGray }
+}
+
+
+
+
+
+function Show-MainMenu {
+    Clear-Host
+    Write-Banner
+
+    Write-Host "   [1] Start Scan" -ForegroundColor Cyan
+    Write-Host "   [2] View Last Results" -ForegroundColor Cyan
+    Write-Host "   [3] Export Report" -ForegroundColor Cyan
+    Write-Host "   [4] Exit" -ForegroundColor Cyan
+    Write-Host
+
+    $choice = Read-Host -Prompt ">> Select an option"
+
+    return $choice
+}
+
+
+
+
+
+$Global:Spinner = (
+    "|",
+    "/",
+    "-",
+    "\"
+)
+
+function Start-Spinner {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$Message
+    )
+    $spinnerThread = [PowerShell]::Create().AddScript({
+        param ($Message, $Spinner)
+
+        $i = 0
+        while ($true) {
+            $frame = $Spinner[$i % $Spinner.Count]
+            Write-Host -NoNewline "`r$frame $Message..."
+            $i++
+            Start-Sleep -Milliseconds 100
+        }
+    })
+    $spinnerThread.AddParameters(@($Message, $Global:Spinner)) | Out-Null
+    $spinnerThread.BeginInvoke() | Out-Null
+    return $spinnerThread
+}
+
+function Stop-Spinner {
+    param (
+        [Parameter(Mandatory = $true)]
+        [System.Management.Automation.PowerShell]$SpinnerThread,
+        [bool]$Success = $true,
+        [string]$ResultMessage = "Done"
+    )
+    $SpinnerThread.Stop()
+    $SpinnerThread.Dispose()
+    if ($Success) { Write-Host -NoNewline "[V]" -ForegroundColor Green } else { Write-Host -NoNewline "[X]" -ForegroundColor Red }
+    Write-Host " $ResultMessage      "
+}
+
+function Write-ScanProgress {
+    param (
+        [Parameter(Mandatory = $true)]
+        [int]$CurrentValue,
+        [Parameter(Mandatory = $true)]
+        [int]$TotalValue
+    )
+    $width = (Get-TerminalWidth) - 40 # Adjust width for text
+    $percentage = if ($TotalValue -gt 0) { [math]::Round(($CurrentValue / $TotalValue) * 100) } else { 0 }
+    $progressChars = [int]($percentage / 100 * $width)
+    $progressBar = ("#" * $progressChars) + ("-" * ($width - $progressChars))
+
+    $progressText = "[$progressBar] $($percentage)% ($CurrentValue/$TotalValue)"
+    Write-Host -NoNewline ("`r" + $progressText)
+}
+
+# --- Table and Summary Functions ---
+
+function Write-Table {
+    param (
+        [Parameter(Mandatory = $true)]
+        [array]$Data,
+        [string[]]$Headers
+    )
+
+    if ($Data.Count -eq 0) {
+        Write-Info "No items to display in the table."
+        return
+    }
+
+    # If no headers are provided, use the properties of the first object
+    if (-not $Headers) {
+        $Headers = $Data[0].PSObject.Properties.Name
+    }
+
+    # Calculate column widths
+    $widths = @{}
+    foreach ($header in $Headers) {
+        $maxWidth = $header.Length
+        foreach ($row in $Data) {
+            $value = "$($row.$header)"
+            if ($value.Length -gt $maxWidth) {
+                $maxWidth = $value.Length
+            }
+        }
+        $widths[$header] = $maxWidth
+    }
+
+    # --- Draw Table ---
+    $line = ''
+    $headerLine = ''
+    foreach ($header in $Headers) {
+        $width = $widths[$header]
+        $line += '-' * ($width + 2) + '+'
+        $headerLine += " $($header.PadRight($width)) |"
+    }
+    $line = '+' + $line.TrimEnd('+') + '+'
+    $headerLine = '|' + $headerLine.TrimEnd('|') + '|'
+    $separator = $line -replace '\+', '|'
+
+    Write-Host $line -ForegroundColor White
+    Write-Host $headerLine -ForegroundColor White
+    Write-Host $separator -ForegroundColor White
+
+    foreach ($row in $Data) {
+        $rowLine = ''
+        foreach ($header in $Headers) {
+            $width = $widths[$header]
+            $value = "$($row.$header)".PadRight($width)
+            $rowLine += " $value |"
+        }
+        Write-Host ('|' + $rowLine.TrimEnd('|') + '|') -ForegroundColor White
+    }
+
+    $footer = $line
+    Write-Host $footer -ForegroundColor White
+}
+
+function Write-Summary {
+    param (
+        [Parameter(Mandatory = $true)]
+        [hashtable]$SummaryData
+    )
+    Write-Section -Title "SCAN COMPLETE"
+    foreach ($key in $SummaryData.Keys) {
+        $value = $SummaryData[$key]
+        $label = "$($key.PadRight(15))"
+        Write-Host -NoNewline " ${label}: " -ForegroundColor White
+        Write-Host $value
+    }
+    Write-Host
+}
+
+#endregion ADVANCED UI
+
+#region CORE LOGIC
 
 # Main Framework Class
 class SecurityScanner {
@@ -82,10 +366,10 @@ class SecurityScanner {
         $logEntry = "[$timestamp] [$level] $message"
         
         switch ($level.ToUpper()) {
-            "ERROR" { Write-Host $logEntry -ForegroundColor Red }
-            "WARNING" { Write-Host $logEntry -ForegroundColor Yellow }
-            "SUCCESS" { Write-Host $logEntry -ForegroundColor Green }
-            default { Write-Host $logEntry -ForegroundColor Gray }
+            "ERROR" { Write-Error $logEntry }
+            "WARNING" { Write-Warning $logEntry }
+            "SUCCESS" { Write-Success $logEntry }
+            default { Write-Info $logEntry }
         }
     }
     
@@ -541,10 +825,7 @@ function Start-ProfessionalScan {
         $fileCounter++
         
         # Progress indication
-        if ($fileCounter % 10 -eq 0 -or $fileCounter -eq $totalFiles) {
-            $percent = [Math]::Round(($fileCounter / $totalFiles) * 100)
-            $scanner.LogEvent("Analysis progress: $fileCounter/$totalFiles ($percent%)", "INFO")
-        }
+        Write-ScanProgress -CurrentValue $fileCounter -TotalValue $totalFiles
         
         $result = Invoke-AdvancedFileAnalysis -filePath $actualPath -scanner $scanner
         $Script:PerformanceMetrics.FilesProcessed++
@@ -574,72 +855,53 @@ function Start-ProfessionalScan {
 function Display-ProfessionalResults {
     param([hashtable]$report, [SecurityScanner]$scanner)
     
-    # Header
-    Write-Host "Enterprise Threat Detection Platform" -ForegroundColor White
-    Write-Host "Advanced Malware Analysis Framework v2.0" -ForegroundColor Gray
-    Write-Host ""
+    Write-Section -Title "SCAN EXECUTION SUMMARY"
     
-    # Scan Summary
-    Write-Host "SCAN EXECUTION SUMMARY" -ForegroundColor White
-    Write-Host "-------------------" -ForegroundColor Gray
-    Write-Host "Execution Time:     $($report.ScanMetadata.Duration.ToString("hh\:mm\:ss"))" -ForegroundColor White
-    Write-Host "Files Analyzed:     $($report.ScanResults.TotalFilesAnalyzed)" -ForegroundColor White
-    Write-Host "Detections Found:   $($report.ScanResults.DetectionsFound)" -ForegroundColor $(if($report.ScanResults.DetectionsFound -gt 0) { "Red" } else { "Green" })
-    Write-Host "Detection Rate:     $($report.ScanResults.DetectionRate)" -ForegroundColor White
-    Write-Host ""
-    
-    # Environment Information
-    Write-Host "SYSTEM ENVIRONMENT" -ForegroundColor White
-    Write-Host "------------------" -ForegroundColor Gray
-    Write-Host "OS:                 $($report.EnvironmentInfo.OperatingSystem)" -ForegroundColor White
-    Write-Host "Architecture:       $($report.EnvironmentInfo.Architecture)" -ForegroundColor White
-    Write-Host "Processors:         $($report.EnvironmentInfo.Processors)" -ForegroundColor White
-    Write-Host "Memory Available:   $($report.EnvironmentInfo.MemoryAvailable)" -ForegroundColor White
-    Write-Host ""
+    $summary = [
+        ordered] @{
+        'Execution Time' = $report.ScanMetadata.Duration.ToString("hh\:mm\:ss")
+        'Files Analyzed' = $report.ScanResults.TotalFilesAnalyzed
+        'Detections Found' = $report.ScanResults.DetectionsFound
+        'Detection Rate' = $report.ScanResults.DetectionRate
+    }
+    Write-Summary -SummaryData $summary
+
+    Write-Section -Title "SYSTEM ENVIRONMENT"
+    $envSummary = [
+        ordered] @{
+        'OS' = $report.EnvironmentInfo.OperatingSystem
+        'Architecture' = $report.EnvironmentInfo.Architecture
+        'Processors' = $report.EnvironmentInfo.Processors
+        'Memory Available' = $report.EnvironmentInfo.MemoryAvailable
+    }
+    Write-Summary -SummaryData $envSummary
     
     # Detailed Detections
     if ($report.DetailedDetections.Count -gt 0) {
-        Write-Host "DETECTION SUMMARY" -ForegroundColor Red
-        Write-Host "---------------" -ForegroundColor Gray
-        Write-Host ""
+        Write-Section -Title "DETECTION SUMMARY"
         
-        $detectionCounter = 1
-        foreach ($detection in $report.DetailedDetections) {
-            Write-Host "Detection $($detectionCounter):" -ForegroundColor Red
-            Write-Host "  File Path:        $($detection.FilePath)" -ForegroundColor White
-            Write-Host "  Confidence Level: $($detection.Confidence)" -ForegroundColor $(switch($detection.Confidence) {
-                "High" { "Red" }
-                "Medium" { "Yellow" }
-                "Low" { "Gray" }
-            })
-            Write-Host "  Threat Score:     $($detection.ThreatScore)" -ForegroundColor Red
-            Write-Host "  Details:          $($detection.Details)" -ForegroundColor White
-            Write-Host ""
-            $detectionCounter++
+        $results = @()
+        foreach($detection in $report.DetailedDetections){
+            $results += [pscustomobject]@{
+                ID = $results.Count + 1
+                File = $detection.FilePath
+                Confidence = $detection.Confidence
+                Score = $detection.ThreatScore
+                Details = $detection.Details
+            }
         }
+        Write-Table -Data $results -Headers 'ID', 'File', 'Confidence', 'Score', 'Details'
         
-        Write-Host "Recommended Action: Review flagged files and apply security policies." -ForegroundColor Yellow
+        Write-Warning "Recommended Action: Review flagged files and apply security policies."
         
     } else {
-        Write-Host "SCAN RESULT: NO THREATS DETECTED" -ForegroundColor Green
-        Write-Host "No security threats identified during scan." -ForegroundColor Gray
+        Write-Success "SCAN RESULT: NO THREATS DETECTED"
     }
     
-    Write-Host ""
-    Write-Host "Scan completed at: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
-    Write-Host "Enterprise Threat Detection Framework v2.0" -ForegroundColor DarkGray
+    Write-System "Scan completed at: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 }
 
 # 2ND.PS1 FUNCTIONALITY MOVED TO TOP
-
-function Show-Banner {
-    # Quiet mode - skip banner display
-    if ($Script:QuietMode) { return }
-    
-    Write-Host ""
-    Write-Host "                    Prefetch Analysis" -ForegroundColor Cyan
-    Write-Host ""
-}
 
 function Test-Administrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -750,7 +1012,7 @@ function Get-RecentDeletionsFromUSN {
     
     foreach ($driveLetter in $DriveLetters) {
         try {
-            if (-not $Script:QuietMode) { Write-Host "[*] Scanning drive $driveLetter`: for recent file activity (last $MinutesBack minutes)..." -ForegroundColor Cyan }
+            if (-not $Script:QuietMode) { Write-Info "Scanning drive $driveLetter`: for recent file activity (last $MinutesBack minutes)..." }
             
             $cutoffTime = (Get-Date).AddMinutes(-$MinutesBack)
             
@@ -758,14 +1020,14 @@ function Get-RecentDeletionsFromUSN {
             $usnOutput = & fsutil usn readjournal "$driveLetter`:" 2>$null
             
             if ($LASTEXITCODE -ne 0) {
-                if (-not $Script:QuietMode) { Write-Host "[!] Unable to read USN Journal on drive $driveLetter`: (may be disabled)" -ForegroundColor Yellow }
+                if (-not $Script:QuietMode) { Write-Warning "Unable to read USN Journal on drive $driveLetter`: (may be disabled)" }
                 continue
             }
             
             $totalLines = $usnOutput.Count
             
             if ($totalLines -eq 0) {
-                if (-not $Script:QuietMode) { Write-Host "[!] No USN Journal data on drive $driveLetter`:" -ForegroundColor Yellow }
+                if (-not $Script:QuietMode) { Write-Warning "No USN Journal data on drive $driveLetter`:" }
                 continue
             }
             
@@ -824,7 +1086,7 @@ function Get-RecentDeletionsFromUSN {
                 }
             }
             
-            if (-not $Script:QuietMode) { Write-Host "[+] Drive $driveLetter`: - Found $activityCount files with recent activity" -ForegroundColor Green }
+            if (-not $Script:QuietMode) { Write-Success "Drive $driveLetter`: - Found $activityCount files with recent activity" }
             
             # Merge into overall activity
             foreach ($key in $recentActivity.Keys) {
@@ -833,7 +1095,7 @@ function Get-RecentDeletionsFromUSN {
             
         }
         catch {
-            if (-not $Script:QuietMode) { Write-Host "[!] Error reading USN Journal on drive $driveLetter`: - $_" -ForegroundColor Yellow }
+            if (-not $Script:QuietMode) { Write-Warning "Error reading USN Journal on drive $driveLetter`: - $_" }
             continue
         }
     }
@@ -843,7 +1105,7 @@ function Get-RecentDeletionsFromUSN {
     
     if (-not $Script:QuietMode) {
         Write-Host ""
-        Write-Host "[+] Total unique files with recent activity across all drives: $($allRecentActivity.Count)" -ForegroundColor Green
+        Write-Success "Total unique files with recent activity across all drives: $($allRecentActivity.Count)"
         Write-Host ""
     }
     
@@ -894,14 +1156,14 @@ function Get-SystemIndexes {
         $data = [System.IO.File]::ReadAllBytes($FilePath)
         
         if ($script:DebugMode) {
-            Write-Host "  [DEBUG] File: $([System.IO.Path]::GetFileName($FilePath))" -ForegroundColor Magenta
-            Write-Host "  [DEBUG] Raw size: $($data.Length) bytes" -ForegroundColor Magenta
+            Write-Info "  [DEBUG] File: $([System.IO.Path]::GetFileName($FilePath))"
+            Write-Info "  [DEBUG] Raw size: $($data.Length) bytes"
         }
         
         $isCompressed = ($data[0] -eq 0x4D -and $data[1] -eq 0x41 -and $data[2] -eq 0x4D)
         
         if ($script:DebugMode) {
-            Write-Host "  [DEBUG] Compressed: $isCompressed" -ForegroundColor Magenta
+            Write-Info "  [DEBUG] Compressed: $isCompressed"
         }
         
         if ($isCompressed) {
@@ -912,7 +1174,7 @@ function Get-SystemIndexes {
             }
             
             if ($script:DebugMode) {
-                Write-Host "  [DEBUG] Decompressed size: $($data.Length) bytes" -ForegroundColor Magenta
+                Write-Info "  [DEBUG] Decompressed size: $($data.Length) bytes"
             }
         }
         
@@ -926,7 +1188,7 @@ function Get-SystemIndexes {
         $version = Get-PrefetchVersion -data $data
         
         if ($script:DebugMode) {
-            Write-Host "  [DEBUG] Prefetch version: $version" -ForegroundColor Magenta
+            Write-Info "  [DEBUG] Prefetch version: $version"
         }
         
         $sig = [System.Text.Encoding]::ASCII.GetString($data, 4, 4)
@@ -975,8 +1237,8 @@ function Get-SystemIndexes {
         }
         
         if ($script:DebugMode) {
-            Write-Host "  [DEBUG] Strings offset: $stringsOffset" -ForegroundColor Magenta
-            Write-Host "  [DEBUG] Strings size: $stringsSize" -ForegroundColor Magenta
+            Write-Info "  [DEBUG] Strings offset: $stringsOffset"
+            Write-Info "  [DEBUG] Strings size: $stringsSize"
         }
         
         # Validate offsets
@@ -1022,7 +1284,7 @@ function Get-SystemIndexes {
         }
         
         if ($script:DebugMode) {
-            Write-Host "  [DEBUG] Extracted $($filenames.Count) filenames" -ForegroundColor Magenta
+            Write-Info "  [DEBUG] Extracted $($filenames.Count) filenames"
         }
         
         return $filenames
@@ -1030,8 +1292,8 @@ function Get-SystemIndexes {
     catch {
         Write-Warning "Error parsing $FilePath : $_"
         if ($script:DebugMode) {
-            Write-Host "  [DEBUG] Exception: $($_.Exception.GetType().Name)" -ForegroundColor Red
-            Write-Host "  [DEBUG] Message: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Error "  [DEBUG] Exception: $($_.Exception.GetType().Name)"
+            Write-Error "  [DEBUG] Message: $($_.Exception.Message)"
         }
         return @()
     }
@@ -1320,40 +1582,35 @@ function Start-DoomsdayScan {
     $Script:QuietMode = $Quiet
     $script:DebugMode = $Debug
     
-    if (-not $Quiet) { Show-Banner }
+    if (-not $Quiet) { Write-Banner }
     
     if (-not (Test-Administrator)) {
         if (-not $Quiet) {
-            Write-Host ""
-            Write-Host "ERROR: " -ForegroundColor Red -NoNewline
-            Write-Host "Administrator privileges required!"
-            Write-Host ""
-            Write-Host "Please launch CMD or PowerShell as admin!" -ForegroundColor Yellow
-            Write-Host ""
+            Write-Error "Administrator privileges required!"
+            Write-Warning "Please launch CMD or PowerShell as admin!"
         }
         return
     }
     
     # Detect Windows version
     $osVersion = [System.Environment]::OSVersion.Version
-    if (-not $Quiet) { Write-Host "[*] Windows Version: $($osVersion.Major).$($osVersion.Minor) Build $($osVersion.Build)" -ForegroundColor Cyan }
+    if (-not $Quiet) { Write-Info "Windows Version: $($osVersion.Major).$($osVersion.Minor) Build $($osVersion.Build)" }
     
     if ($osVersion.Major -eq 10) {
         if ($osVersion.Build -ge 22000) {
-            if (-not $Quiet) { Write-Host "[*] Detected: Windows 11" -ForegroundColor Green }
+            if (-not $Quiet) { Write-Success "Detected: Windows 11" }
         } else {
-            if (-not $Quiet) { Write-Host "[*] Detected: Windows 10" -ForegroundColor Green }
+            if (-not $Quiet) { Write-Success "Detected: Windows 10" }
         }
     }
     if (-not $Quiet) { Write-Host "" }
     
-    if (-not $Quiet) { Write-Host "[*] Extracting file indexes..." -ForegroundColor Cyan }
-    if (-not $Quiet) { Write-Host "" }
+    if (-not $Quiet) { Write-Info "Extracting file indexes..." }
     
     $systemPath = "C:\Windows\" + "Pre" + "fetch"
     
     if (-not (Test-Path $systemPath)) {
-        if (-not $Quiet) { Write-Host "[!] Prefetch directory not found: $systemPath" -ForegroundColor Red }
+        if (-not $Quiet) { Write-Error "Prefetch directory not found: $systemPath" }
         return
     }
     
@@ -1361,17 +1618,16 @@ function Start-DoomsdayScan {
     
     if ($javaFiles.Count -eq 0) {
         if (-not $Quiet) {
-            Write-Host "[!] No JAVA prefetch files found in $systemPath" -ForegroundColor Yellow
-            Write-Host "[*] This could mean:" -ForegroundColor Yellow
-            Write-Host "    - Java has never been run on this system" -ForegroundColor Gray
-            Write-Host "    - Prefetch files have been cleared" -ForegroundColor Gray
-            Write-Host "    - Prefetch is disabled" -ForegroundColor Gray
+            Write-Warning "No JAVA prefetch files found in $systemPath"
+            Write-Info "This could mean:"
+            Write-System "- Java has never been run on this system"
+            Write-System "- Prefetch files have been cleared"
+            Write-System "- Prefetch is disabled"
         }
         return
     }
     
-    if (-not $Quiet) { Write-Host "[+] Found $($javaFiles.Count) JAVA prefetch file(s)" -ForegroundColor Green }
-    if (-not $Quiet) { Write-Host "" }
+    if (-not $Quiet) { Write-Success "Found $($javaFiles.Count) JAVA prefetch file(s)" }
     
     $allJarPaths = @()
     $fileMetadata = @{}
@@ -1380,16 +1636,11 @@ function Start-DoomsdayScan {
     
     foreach ($sysFile in $javaFiles) {
         $processedFiles++
-        if (-not $Quiet) {
-            Write-Progress -Activity "Extracting Indexes" `
-                          -Status "Processing file $processedFiles of $($javaFiles.Count)" `
-                          -PercentComplete (($processedFiles / $javaFiles.Count) * 100)
-        }
+        Write-ScanProgress -CurrentValue $processedFiles -TotalValue $javaFiles.Count
         
         if ($script:DebugMode) {
             if (-not $Quiet) {
-                Write-Host ""
-                Write-Host "[DEBUG] ======================================" -ForegroundColor Magenta
+                Write-Info "[DEBUG] ======================================"
             }
         }
         
@@ -1397,7 +1648,7 @@ function Start-DoomsdayScan {
         
         if ($indexes.Count -eq 0) {
             if ($script:DebugMode) {
-                if (-not $Quiet) { Write-Host "  [DEBUG] No indexes extracted from $($sysFile.Name)" -ForegroundColor Yellow }
+                if (-not $Quiet) { Write-Warning "  [DEBUG] No indexes extracted from $($sysFile.Name)" }
             }
             continue
         }
@@ -1405,7 +1656,7 @@ function Start-DoomsdayScan {
         $successfulParsing++
         
         if ($script:DebugMode) {
-            if (-not $Quiet) { Write-Host "  [DEBUG] Successfully extracted $($indexes.Count) paths" -ForegroundColor Green }
+            if (-not $Quiet) { Write-Success "  [DEBUG] Successfully extracted $($indexes.Count) paths" }
         }
         
         $indexNum = 0
@@ -1441,34 +1692,28 @@ function Start-DoomsdayScan {
         }
     }
     
-    if (-not $Quiet) { Write-Progress -Activity "Extracting Indexes" -Completed }
-    
     if (-not $Quiet) {
-        Write-Host ""
-        Write-Host "[+] Prefetch files successfully parsed: $successfulParsing / $processedFiles" -ForegroundColor Green
-        Write-Host "[+] Total file paths extracted: $($allJarPaths.Count)" -ForegroundColor Green
+        Write-Host
+        Write-Success "Prefetch files successfully parsed: $successfulParsing / $processedFiles"
+        Write-Success "Total file paths extracted: $($allJarPaths.Count)"
     }
     
     if ($allJarPaths.Count -eq 0) {
         if (-not $Quiet) {
-            Write-Host ""
-            Write-Host "[!] No file paths could be extracted from prefetch files" -ForegroundColor Yellow
-            Write-Host "[*] Possible issues:" -ForegroundColor Yellow
-            Write-Host "    - Prefetch parsing failed (incompatible format)" -ForegroundColor Gray
-            Write-Host "    - No Java applications with file references" -ForegroundColor Gray
-            Write-Host ""
-            Write-Host "[*] Try running with -Debug flag for more information:" -ForegroundColor Cyan
-            Write-Host "    .\doomsday-scanner-usn.ps1 -Debug" -ForegroundColor White
+            Write-Warning "No file paths could be extracted from prefetch files"
+            Write-Info "Possible issues:"
+            Write-System "- Prefetch parsing failed (incompatible format)"
+            Write-System "- No Java applications with file references"
+            Write-Info "Try running with -Debug flag for more information:"
+            Write-System ".\doomsday-scanner-usn.ps1 -Debug"
         }
         return
     }
     
     $uniquePaths = $allJarPaths | Select-Object -Unique
-    if (-not $Quiet) { Write-Host "[+] Unique files to scan: $($uniquePaths.Count)" -ForegroundColor Green }
-    if (-not $Quiet) { Write-Host "" }
+    if (-not $Quiet) { Write-Success "Unique files to scan: $($uniquePaths.Count)" }
     
-    if (-not $Quiet) { Write-Host "[*] Checking file existence across all drives..." -ForegroundColor Cyan }
-    if (-not $Quiet) { Write-Host "" }
+    if (-not $Quiet) { Write-Info "Checking file existence across all drives..." }
     
     $existingPaths = @{}  # Store path -> actual location
     $trulyMissingPaths = @()
@@ -1503,7 +1748,7 @@ function Start-DoomsdayScan {
                         $resolvedToDifferentDrive++
                         
                         if ($script:DebugMode) {
-                            if (-not $Quiet) { Write-Host "  [DEBUG] Found on different drive: $testPath (assumed $path)" -ForegroundColor Cyan }
+                            if (-not $Quiet) { Write-Info "  [DEBUG] Found on different drive: $testPath (assumed $path)" }
                         }
                         break
                     }
@@ -1521,7 +1766,7 @@ function Start-DoomsdayScan {
                 $outsideRangeCount++
                 if ($script:DebugMode) {
                     $sizeMB = [math]::Round($fileSize / 1MB, 2)
-                    if (-not $Quiet) { Write-Host "  [DEBUG] Skipped (size: $sizeMB MB): $foundPath" -ForegroundColor Gray }
+                    if (-not $Quiet) { Write-System "  [DEBUG] Skipped (size: $sizeMB MB): $foundPath" }
                 }
             }
         }
@@ -1534,21 +1779,18 @@ function Start-DoomsdayScan {
     $missingCount = $trulyMissingPaths.Count
     
     if (-not $Quiet) {
-        Write-Host ""
-        Write-Host "[+] Total paths checked: $checkCount" -ForegroundColor Cyan
-        Write-Host "[+] Files found and in size range (200KB-15MB): $($existingPaths.Count)" -ForegroundColor Green
+        Write-Info "Total paths checked: $checkCount"
+        Write-Success "Files found and in size range (200KB-15MB): $($existingPaths.Count)"
         if ($resolvedToDifferentDrive -gt 0) {
-            Write-Host "[+] Files resolved to different drives: $resolvedToDifferentDrive" -ForegroundColor Cyan
+            Write-Info "Files resolved to different drives: $resolvedToDifferentDrive"
         }
-        Write-Host "[!] Files outside size range: $outsideRangeCount" -ForegroundColor Gray
-        Write-Host "[!] Files truly missing (not on any drive): $missingCount" -ForegroundColor Yellow
-        Write-Host ""
+        Write-System "Files outside size range: $outsideRangeCount"
+        Write-Warning "Files truly missing (not on any drive): $missingCount"
     }
     
     # Show truly missing files (filter out temp files, focus on JARs/EXEs)
     if ($missingCount -gt 0 -and -not $Quiet) {
-        Write-Host "[*] Truly missing files (deleted from all drives):" -ForegroundColor Cyan
-        Write-Host ""
+        Write-Info "Truly missing files (deleted from all drives):"
         
         $displayedCount = 0
         foreach ($missingPath in $trulyMissingPaths) {
@@ -1564,31 +1806,26 @@ function Start-DoomsdayScan {
             }
             
             $displayedCount++
-            Write-Host "  [DELETED] " -ForegroundColor Yellow -NoNewline
-            Write-Host $missingPath -ForegroundColor White
-            Write-Host "      Source: " -NoNewline
-            Write-Host "$($fileMetadata[$missingPath].SourceFile)" -ForegroundColor Cyan
+            Write-Warning "[DELETED] $missingPath"
+            Write-Info "      Source: $($fileMetadata[$missingPath].SourceFile)"
         }
         
         if ($displayedCount -eq 0) {
-            Write-Host "  No suspicious deletions found (only temp files deleted)" -ForegroundColor Green
+            Write-Success "No suspicious deletions found (only temp files deleted)"
         }
-        
-        Write-Host ""
     }
     
     if ($existingPaths.Count -eq 0) {
         if (-not $Quiet) {
-            Write-Host "[!] No files exist to scan" -ForegroundColor Yellow
-            Write-Host "[*] All extracted paths point to files that either:" -ForegroundColor Yellow
-            Write-Host "    - No longer exist (deleted)" -ForegroundColor Gray
-            Write-Host "    - Are outside the 200KB-15MB size range" -ForegroundColor Gray
+            Write-Warning "No files exist to scan"
+            Write-Info "All extracted paths point to files that either:"
+            Write-System "- No longer exist (deleted)"
+            Write-System "- Are outside the 200KB-15MB size range"
         }
         return
     }
     
-    if (-not $Quiet) { Write-Host "[*] Scanning files for Doomsday Client..." -ForegroundColor Cyan }
-    if (-not $Quiet) { Write-Host "" }
+    if (-not $Quiet) { Write-Info "Scanning files for Doomsday Client..." }
     
     $detections = @()
     $scanned = 0
@@ -1600,13 +1837,7 @@ function Start-DoomsdayScan {
         
         $filename = [System.IO.Path]::GetFileName($actualPath)
         
-        if (-not $Quiet) {
-            Write-Progress -Activity "Scanning for Doomsday Client" `
-                          -Status "[$scanned/$($existingPaths.Count)]" `
-                          -PercentComplete (($scanned / $existingPaths.Count) * 100)
-        }
-        
-        if (-not $Quiet) { Write-Host "`r[$scanned/$($existingPaths.Count)]" -NoNewline -ForegroundColor Cyan }
+        Write-ScanProgress -CurrentValue $scanned -TotalValue $existingPaths.Count
         
         try {
             $result = Test-DoomsdayClient -Path $actualPath
@@ -1616,7 +1847,6 @@ function Start-DoomsdayScan {
             }
             
             if ($result.IsDetected) {
-                if (-not $Quiet) { Write-Host "`r                              `r" -NoNewline }
                 
                 $detections += [PSCustomObject]@{
                     Path = $actualPath
@@ -1630,123 +1860,76 @@ function Start-DoomsdayScan {
                 }
                 
                 if (-not $Quiet) {
-                    Write-Host "[!] DETECTION: " -ForegroundColor Red -NoNewline
-                    Write-Host $actualPath
-                    Write-Host "    Confidence: " -NoNewline
-                    
-                    switch ($result.Confidence) {
-                        "HIGH"   { Write-Host "HIGH" -ForegroundColor Red }
-                        "MEDIUM" { Write-Host "MEDIUM" -ForegroundColor Yellow }
-                        "LOW"    { Write-Host "LOW" -ForegroundColor Gray }
-                    }
+                    Write-Error "[!] DETECTION: $actualPath"
+                    Write-Info "    Confidence: $($result.Confidence)"
                     
                     if ($result.IsRenamedJar) {
-                        Write-Host "    Renamed JAR detected!" -ForegroundColor Red
+                        Write-Error "    Renamed JAR detected!"
                     }
                     if ($result.BytePatternMatches.Count -gt 0) {
-                        Write-Host "    Byte patterns: $($result.BytePatternMatches.Count)" -ForegroundColor Red
+                        Write-Error "    Byte patterns: $($result.BytePatternMatches.Count)"
                     }
-                    Write-Host ""
                 }
             }
         }
         catch {
             if (-not $Quiet) {
-                Write-Host "`r                              `r" -NoNewline
-                Write-Host "Error scanning $filename : $_" -ForegroundColor Red
+                Write-Error "Error scanning $filename : $_"
             }
         }
     }
     
     if (-not $Quiet) {
-        Write-Host "`r                              `r" -NoNewline
+        Write-Host
         
-        Write-Progress -Activity "Scanning for Doomsday Client" -Completed
-        Write-Host ""
+        Write-Section -Title "PREFETCH SCAN COMPLETE"
         
-        Write-Host ""
-        Write-Host "========================================" -ForegroundColor Cyan
-        Write-Host "PREFETCH SCAN COMPLETE" -ForegroundColor Cyan
-        Write-Host "========================================" -ForegroundColor Cyan
-        Write-Host "Total indexes extracted: $($allJarPaths.Count)"
-        Write-Host "Files in size range: $($uniquePaths.Count)"
-        Write-Host "Files exist: $($existingPaths.Count)"
-        Write-Host "Files scanned: $scanned"
-        Write-Host "Files skipped (>30 classes): $skipped" -ForegroundColor Gray
-        
-        Write-Host "Doomsday Client detections: " -NoNewline
+        $summary = [
+            ordered] @{
+            'Total indexes extracted' = $allJarPaths.Count
+            'Files in size range' = $uniquePaths.Count
+            'Files exist' = $existingPaths.Count
+            'Files scanned' = $scanned
+            'Files skipped (>30 classes)' = $skipped
+        }
+        Write-Summary -SummaryData $summary
         
         if ($detections.Count -gt 0) {
-            Write-Host $detections.Count -ForegroundColor Red
+            Write-Error "Doomsday Client detections: $($detections.Count)"
             
-            Write-Host ""
-            Write-Host "Detections by confidence:" -ForegroundColor Yellow
             $high = ($detections | Where-Object { $_.Confidence -eq "HIGH" }).Count
             $medium = ($detections | Where-Object { $_.Confidence -eq "MEDIUM" }).Count
             $low = ($detections | Where-Object { $_.Confidence -eq "LOW" }).Count
             
-            if ($high -gt 0) { Write-Host "  HIGH: $high" -ForegroundColor Red }
-            if ($medium -gt 0) { Write-Host "  MEDIUM: $medium" -ForegroundColor Yellow }
-            if ($low -gt 0) { Write-Host "  LOW: $low" -ForegroundColor Gray }
+            if ($high -gt 0) { Write-Error "  HIGH: $high" }
+            if ($medium -gt 0) { Write-Warning "  MEDIUM: $medium" }
+            if ($low -gt 0) { Write-System "  LOW: $low" }
             
-            Write-Host ""
-            Write-Host "DOOMSDAY CLIENT DETECTED ON THIS SYSTEM!" -ForegroundColor Red
+            Write-Error "DOOMSDAY CLIENT DETECTED ON THIS SYSTEM!"
             
-            Write-Host ""
-            Write-Host "========================================" -ForegroundColor Red
-            Write-Host "PREFETCH DETECTION DETAILS" -ForegroundColor Red
-            Write-Host "========================================" -ForegroundColor Red
-            Write-Host ""
+            Write-Section -Title "PREFETCH DETECTION DETAILS"
             
-            $detectionNum = 1
-            foreach ($detection in $detections) {
-                Write-Host "[$detectionNum] " -NoNewline -ForegroundColor Red
-                Write-Host $detection.Path -ForegroundColor White
-                Write-Host "    Source File: " -NoNewline
-                Write-Host $detection.SourceFile -ForegroundColor Cyan
-                Write-Host "    Index Number: " -NoNewline
-                Write-Host "#$($detection.IndexNumber)" -ForegroundColor Cyan
-                Write-Host "    Confidence: " -NoNewline
-                
-                switch ($detection.Confidence) {
-                    "HIGH"   { Write-Host "HIGH" -ForegroundColor Red }
-                    "MEDIUM" { Write-Host "MEDIUM" -ForegroundColor Yellow }
-                    "LOW"    { Write-Host "LOW" -ForegroundColor Gray }
+            $results = @()
+            foreach($detection in $detections){
+                $results += [pscustomobject]@{
+                    ID = $results.Count + 1
+                    Path = $detection.Path
+                    Source = $detection.SourceFile
+                    Confidence = $detection.Confidence
+                    Renamed = $detection.IsRenamedJar
+                    BytePatterns = $detection.BytePatterns
+                    ClassMatches = $detection.ClassMatches
+                    SingleLetterClasses = $detection.SingleLetterClasses
                 }
-                
-                if ($detection.IsRenamedJar) {
-                    Write-Host "    Renamed JAR: " -NoNewline
-                    Write-Host "YES" -ForegroundColor Red
-                }
-                
-                if ($detection.BytePatterns -gt 0) {
-                    Write-Host "    Byte Patterns: " -NoNewline
-                    Write-Host $detection.BytePatterns -ForegroundColor Red
-                }
-                
-                if ($detection.ClassMatches -gt 0) {
-                    Write-Host "    Class Matches: " -NoNewline
-                    Write-Host $detection.ClassMatches -ForegroundColor Yellow
-                }
-                
-                if ($detection.SingleLetterClasses -gt 0) {
-                    Write-Host "    Single-Letter Classes: " -NoNewline
-                    Write-Host $detection.SingleLetterClasses -ForegroundColor Yellow
-                }
-                
-                Write-Host ""
-                $detectionNum++
             }
+            Write-Table -Data $results -Headers 'ID', 'Path', 'Source', 'Confidence', 'Renamed', 'BytePatterns', 'ClassMatches', 'SingleLetterClasses'
+
         } else {
-            Write-Host "0" -ForegroundColor Green
-            Write-Host ""
-            Write-Host "No Doomsday Client detected in prefetch analysis!" -ForegroundColor Green
+            Write-Success "No Doomsday Client detected in prefetch analysis!"
         }
         
-        Write-Host ""
-        
         if ($script:DebugMode) {
-            Write-Host "[DEBUG MODE] Prefetch scan completed with debugging enabled" -ForegroundColor Magenta
+            Write-Info "[DEBUG MODE] Prefetch scan completed with debugging enabled"
         }
     }
     
@@ -1762,56 +1945,64 @@ function Start-DoomsdayScan {
 }
 
 # Main execution entry point
-if ($MyInvocation.InvocationName -ne '.') {
-    # Run main scan
-    $mainReport = Start-ProfessionalScan @args
-    
-    # Run prefetch analysis from 2nd.ps1 embedded functionality
-    Write-Host ""
-    Write-Host "========================================" -ForegroundColor Cyan
-    Write-Host "RUNNING PREFETCH ANALYSIS " -ForegroundColor Cyan
-    Write-Host "========================================" -ForegroundColor Cyan
-    
-    # Execute prefetch analysis using the embedded 2nd.ps1 functionality
-    $prefetchResults = Start-DoomsdayScan -Quiet:$true
-    
-    # Display results from both scans
-    Write-Host ""
-    Write-Host "========================================" -ForegroundColor Green
-    Write-Host "CONSOLIDATED SCAN RESULTS" -ForegroundColor Green
-    Write-Host "========================================" -ForegroundColor Green
-    
-    Write-Host "MAIN ADVANCED ANALYSIS RESULTS:" -ForegroundColor White
-    if ($mainReport.DetailedDetections.Count -gt 0) {
-        Write-Host "Detections found: $($mainReport.DetailedDetections.Count)" -ForegroundColor Red
-        $detectionNum = 1
-        foreach ($detection in $mainReport.DetailedDetections) {
-            Write-Host "  [$detectionNum] Path: $($detection.FilePath)" -ForegroundColor Yellow
-            Write-Host "      Confidence: $($detection.Confidence)" -ForegroundColor White
-            Write-Host "      Threat Score: $($detection.ThreatScore)" -ForegroundColor White
-            $detectionNum++
+function Main {
+    while ($true) {
+        $selection = Show-MainMenu
+        switch ($selection) {
+            '1' { 
+                $mainReport = Start-ProfessionalScan @args
+                $prefetchResults = Start-DoomsdayScan -Quiet:$true
+                
+                Write-Section -Title "CONSOLIDATED SCAN RESULTS"
+                
+                Write-Info "MAIN ADVANCED ANALYSIS RESULTS:"
+                if ($mainReport.DetailedDetections.Count -gt 0) {
+                    Write-Error "Detections found: $($mainReport.DetailedDetections.Count)"
+                    $results = @()
+                    foreach($detection in $mainReport.DetailedDetections){
+                        $results += [pscustomobject]@{
+                            ID = $results.Count + 1
+                            File = $detection.FilePath
+                            Confidence = $detection.Confidence
+                            Score = $detection.ThreatScore
+                        }
+                    }
+                    Write-Table -Data $results -Headers 'ID', 'File', 'Confidence', 'Score'
+                } else {
+                    Write-Success "No threats detected by main analysis"
+                }
+                
+                Write-Info "PREFETCH ANALYSIS RESULTS (2nd.ps1):"
+                if ($prefetchResults -and $prefetchResults.Detections.Count -gt 0) {
+                    Write-Error "Detections found: $($prefetchResults.Detections.Count)"
+                    $results = @()
+                    foreach($detection in $prefetchResults.Detections){
+                        $results += [pscustomobject]@{
+                            ID = $results.Count + 1
+                            Path = $detection.Path
+                            Source = $detection.SourceFile
+                            Confidence = $detection.Confidence
+                        }
+                    }
+                    Write-Table -Data $results -Headers 'ID', 'Path', 'Source', 'Confidence'
+                } else {
+                    Write-Success "No threats detected by prefetch analysis"
+                }
+                
+                Write-Section -Title "SCANNING COMPLETE"
+            }
+            '2' { Write-Warning "Not implemented yet." }
+            '3' { Write-Warning "Not implemented yet." }
+            '4' { Write-Success "Exiting scanner. Goodbye!"; break }
+            default {
+                Write-Error "Invalid selection. Please try again."
+                Start-Sleep -Seconds 2
+            }
         }
-    } else {
-        Write-Host "No threats detected by main analysis" -ForegroundColor Green
-    }
-    
-    Write-Host ""
-    Write-Host "PREFETCH ANALYSIS RESULTS (2nd.ps1):" -ForegroundColor White
-    if ($prefetchResults -and $prefetchResults.Detections.Count -gt 0) {
-        Write-Host "Detections found: $($prefetchResults.Detections.Count)" -ForegroundColor Red
-        $detectionNum = 1
-        foreach ($detection in $prefetchResults.Detections) {
-            Write-Host "  [$detectionNum] Path: $($detection.Path)" -ForegroundColor Yellow
-            Write-Host "      Confidence: $($detection.Confidence)" -ForegroundColor White
-            Write-Host "      Source File: $($detection.SourceFile)" -ForegroundColor White
-            $detectionNum++
+        if ($selection -in '1', '2', '3') {
+            Read-Host "Press Enter to return to the main menu..."
         }
-    } else {
-        Write-Host "No threats detected by prefetch analysis" -ForegroundColor Green
     }
-    
-    Write-Host ""
-    Write-Host "========================================" -ForegroundColor Green
-    Write-Host "SCANNING COMPLETE" -ForegroundColor Green
-    Write-Host "========================================" -ForegroundColor Green
 }
+
+Main
